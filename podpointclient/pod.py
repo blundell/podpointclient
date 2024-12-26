@@ -9,6 +9,9 @@ from strenum import StrEnum, KebabCaseStrEnum
 from .helpers.functions import lazy_convert_to_datetime, lazy_iso_format_datetime
 from .schedule import Schedule, ScheduleStatus
 from .charge import Charge
+from .charge_mode import ChargeMode
+from .charge_override import ChargeOverride
+from .connectivity_status import ConnectivityStatus
 
 
 class StatusName(StrEnum):
@@ -17,6 +20,7 @@ class StatusName(StrEnum):
     UNAVAILABLE    = "Unavailable"
     CHARGING       = "Charging"
     OUT_OF_SERVICE = "Out of Service"
+    SUSPENDED_EV   = "Charged*"
 
 
 class StatusKeyName(KebabCaseStrEnum):
@@ -25,6 +29,7 @@ class StatusKeyName(KebabCaseStrEnum):
     UNAVAILABLE    = auto()
     CHARGING       = auto()
     OUT_OF_SERVICE = auto()
+    SUSPENDED_EV   = auto()
 
 
 @dataclass
@@ -158,6 +163,10 @@ class Pod:
         self.total_charge_seconds: int = 0
         self.current_kwh: float        = 0.0
         self.total_cost: int           = 0
+        self.offering_energy: bool     = False
+        self.last_message_at: datetime = None
+        self.charging_state: str       = None
+        self.connectivity_status: ConnectivityStatus = None
 
         self.firmware: Union(Firmware, None) = None
 
@@ -242,6 +251,11 @@ class Pod:
                 )
             )
 
+        self.charge_override = None
+        charge_override_data = data.get('charge_override', None)
+        if charge_override_data is not None:
+            self.charge_override = ChargeOverride(data=charge_override_data)
+
 
     @property
     def dict(self) -> Dict[str, Any]:
@@ -272,7 +286,12 @@ class Pod:
             "total_charge_seconds": self.total_charge_seconds,
             "current_kwh": self.current_kwh,
             "total_cost": self.total_cost,
-            "firmware": None
+            "firmware": None,
+            "charge_override": None,
+            "offering_energy": self.offering_energy,
+            "last_message_at": lazy_iso_format_datetime(self.last_message_at),
+            "charging_state": self.charging_state if self.charging_state is not None else "Unknown",
+            "connectivity_status": self.connectivity_status.dict if self.connectivity_status is not None else None,
         }
 
         for status in self.statuses:
@@ -289,12 +308,32 @@ class Pod:
         if isinstance(self.firmware, Firmware):
             dictionary['firmware'] = self.firmware.dict
 
+        if isinstance(self.charge_override, ChargeOverride):
+            dictionary['charge_override'] = self.charge_override.dict
+
         return dictionary
 
     def to_json(self) -> str:
         """JSON representation of a Pod"""
         return json.dumps(self.dict, ensure_ascii=False)
+    
+    @property
+    def charge_mode(self) -> ChargeMode:
+        """what is the current charge override mode?"""
+        override = self.charge_override
 
+        if override is None or override.ppid is None:
+            return ChargeMode.SMART
+
+        if override.active:
+            return ChargeMode.OVERRIDE
+
+        elif override.requested_at is not None and override.received_at is not None and override.ends_at is None:
+            return ChargeMode.MANUAL
+
+        else:
+            _LOGGER.warn("Unable to caclculate charge mode")
+            return None
 
     @dataclass
     class Model:

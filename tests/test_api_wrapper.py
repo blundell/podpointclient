@@ -17,13 +17,24 @@ async def test_get(aiohttp_client):
         assert "OK" == await result.text()
 
 @pytest.mark.asyncio
-async def test_post(aiohttp_client):
+async def test_post_with_dictionary_data(aiohttp_client):
   with aioresponses() as m:
     m.post('https://google.com/api/v1/test', body="OK")
 
     async with aiohttp.ClientSession() as session:
       wrapper = APIWrapper(session)
       async with await wrapper.post("https://google.com/api/v1/test", body={}, headers={}) as result:
+        assert 200 == result.status
+        assert "OK" == await result.text()
+
+@pytest.mark.asyncio
+async def test_post_with_string_data(aiohttp_client):
+  with aioresponses() as m:
+    m.post('https://google.com/api/v1/test', body="OK")
+
+    async with aiohttp.ClientSession() as session:
+      wrapper = APIWrapper(session)
+      async with await wrapper.post("https://google.com/api/v1/test", body="foo", headers={}) as result:
         assert 200 == result.status
         assert "OK" == await result.text()
 
@@ -36,6 +47,17 @@ async def test_put(aiohttp_client):
       wrapper = APIWrapper(session)
       async with await wrapper.put("https://google.com/api/v1/test", body={}, headers={}, params={"foo": "bar"}) as result:
         assert 200 == result.status
+        assert "OK" == await result.text()
+
+@pytest.mark.asyncio
+async def test_delete(aiohttp_client):
+  with aioresponses() as m:
+    m.delete('https://google.com/api/v1/test?foo=bar', status=204, body="OK")
+
+    async with aiohttp.ClientSession() as session:
+      wrapper = APIWrapper(session)
+      async with await wrapper.delete("https://google.com/api/v1/test", headers={}, params={"foo": "bar"}) as result:
+        assert 204 == result.status
         assert "OK" == await result.text()
 
 @pytest.mark.asyncio

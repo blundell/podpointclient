@@ -6,21 +6,26 @@ from podpointclient.client import PodPointClient
 from typing import List
 from podpointclient.pod import Pod, Firmware
 from podpointclient.charge import Charge
+from podpointclient.charge_override import ChargeOverride
+from podpointclient.connectivity_status import ConnectivityStatus, Evse
 from podpointclient.user import User
+from podpointclient.errors import ChargeOverrideValidationError
 import pytest
+from datetime import datetime, timezone
 from freezegun import freeze_time
 import json
+import pytz
+from datetime import timedelta
 
-from podpointclient.endpoints import API_BASE_URL, AUTH, CHARGE_SCHEDULES, CHARGES, FIRMWARE, PODS, SESSIONS, UNITS, USERS
+from podpointclient.endpoints import GOOGLE_BASE_URL, PASSWORD_VERIFY, API_BASE_URL, AUTH, CHARGE_SCHEDULES, CHARGES, FIRMWARE, PODS, SESSIONS, UNITS, USERS, CHARGE_OVERRIDE, MOBILE_API_BASE_URL, CHARGERS, CONNECTIVITY_STATUS
 
 @pytest.mark.asyncio
 @freeze_time("Jan 1st, 2022")
 async def test_async_credentials_verified():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -35,7 +40,7 @@ async def test_async_credentials_verified():
     }
     
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
         m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=&perpage=1&page=1&timestamp=1640995200.0', payload=pods_response)
 
@@ -48,10 +53,9 @@ async def test_async_credentials_verified():
 @freeze_time("Jan 1st, 2022")
 async def test_async_credentials_verified_returns_false_if_no_pods():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -64,7 +68,7 @@ async def test_async_credentials_verified_returns_false_if_no_pods():
     }
     
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
         m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=&perpage=1&page=1&timestamp=1640995200.0', payload=pods_response)
 
@@ -77,10 +81,9 @@ async def test_async_credentials_verified_returns_false_if_no_pods():
 @freeze_time("Jan 1st, 2022")
 async def test_async_credentials_verified_returns_false_if_body_unexpected():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -91,7 +94,7 @@ async def test_async_credentials_verified_returns_false_if_body_unexpected():
     pods_response = { "foo": "bar" }
     
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
         m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=&perpage=1&page=1&timestamp=1640995200.0', payload=pods_response)
 
@@ -104,10 +107,9 @@ async def test_async_credentials_verified_returns_false_if_body_unexpected():
 @freeze_time("Jan 1st, 2022")
 async def test_async_get_pods_response():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -122,9 +124,9 @@ async def test_async_get_pods_response():
     }
 
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
-        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules&perpage=5&page=1&timestamp=1640995200.0', payload=pods_response)
+        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules%252Ccharge_override&perpage=5&page=1&timestamp=1640995200.0', payload=pods_response)
 
         async with aiohttp.ClientSession() as session:
             client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
@@ -136,10 +138,9 @@ async def test_async_get_pods_response():
 @pytest.mark.asyncio
 async def test_async_get_pods_response_without_timestamp():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -154,9 +155,9 @@ async def test_async_get_pods_response_without_timestamp():
     }
 
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
-        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules&perpage=5&page=1', payload=pods_response)
+        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules%252Ccharge_override&perpage=5&page=1', payload=pods_response)
 
         async with aiohttp.ClientSession() as session:
             client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=False)
@@ -168,10 +169,9 @@ async def test_async_get_pods_response_without_timestamp():
 @pytest.mark.asyncio
 async def test_async_get_all_pods_response():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -197,11 +197,11 @@ async def test_async_get_all_pods_response():
     }
 
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
-        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules&perpage=5&page=1', payload=pods_response)
-        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules&perpage=5&page=2', payload=pods_response)
-        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules&perpage=5&page=3', payload=pods_response_short)
+        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules%252Ccharge_override&perpage=5&page=1', payload=pods_response)
+        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules%252Ccharge_override&perpage=5&page=2', payload=pods_response)
+        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules%252Ccharge_override&perpage=5&page=3', payload=pods_response_short)
 
         async with aiohttp.ClientSession() as session:
             client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=False)
@@ -214,10 +214,9 @@ async def test_async_get_all_pods_response():
 @freeze_time("Jan 1st, 2022")
 async def test_async_get_all_pods_response_with_includes_overridden_and_timestamp():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -243,7 +242,7 @@ async def test_async_get_all_pods_response_with_includes_overridden_and_timestam
     }
 
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
         m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=foo%252Cbar&perpage=5&page=1&timestamp=1640995200.0', payload=pods_response)
         m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=foo%252Cbar&perpage=5&page=2&timestamp=1640995200.0', payload=pods_response_short)
@@ -259,10 +258,9 @@ async def test_async_get_all_pods_response_with_includes_overridden_and_timestam
 @freeze_time("Jan 1st, 2022")
 async def test_async_get_all_pods_response_with_includes_empty_and_timestamp():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -288,7 +286,7 @@ async def test_async_get_all_pods_response_with_includes_empty_and_timestamp():
     }
 
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
         m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?perpage=5&page=1&timestamp=1640995200.0', payload=pods_response)
         m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?perpage=5&page=2&timestamp=1640995200.0', payload=pods_response_short)
@@ -304,10 +302,9 @@ async def test_async_get_all_pods_response_with_includes_empty_and_timestamp():
 @freeze_time("Jan 1st, 2022")
 async def test_async_set_schedules_response():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -324,9 +321,9 @@ async def test_async_set_schedules_response():
     schedules_response = json.load(open('./tests/fixtures/create_schedules.json'))
 
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
-        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules&perpage=all&timestamp=1640995200.0', payload=pods_response)
+        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules%252Ccharge_override&perpage=all&timestamp=1640995200.0', payload=pods_response)
         m.put(f'{API_BASE_URL}{UNITS}/198765{CHARGE_SCHEDULES}?timestamp=1640995200.0', status=201, payload=schedules_response)
         m.put(f'{API_BASE_URL}{UNITS}/198765{CHARGE_SCHEDULES}?timestamp=1640995200.0', status=200, payload=schedules_response)
 
@@ -342,10 +339,9 @@ async def test_async_set_schedules_response():
 @freeze_time("Jan 1st, 2022")
 async def test_async_get_charges_response():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -360,7 +356,7 @@ async def test_async_get_charges_response():
     charges_reponse_empty = json.load(open('./tests/fixtures/charges_empty.json'))
 
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
         m.get(f'{API_BASE_URL}{USERS}/1234{CHARGES}?perpage=all&page=1&timestamp=1640995200.0', payload=charges_reponse)
         m.get(f'{API_BASE_URL}{USERS}/1234{CHARGES}?perpage=5&page=1&timestamp=1640995200.0', payload=charges_reponse_small)
@@ -509,10 +505,9 @@ async def test__schedule_data():
 @freeze_time("Jan 1st, 2022")
 async def test_async_get_firmware():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -524,7 +519,7 @@ async def test_async_get_firmware():
     firmware_response = json.load(open('./tests/fixtures/complete_firmware.json'))
 
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
         m.get(f'{API_BASE_URL}{UNITS}/198765{FIRMWARE}?timestamp=1640995200.0', payload=firmware_response)
         m.get(f'{API_BASE_URL}{UNITS}/198765{FIRMWARE}', payload=firmware_response)
@@ -547,10 +542,9 @@ async def test_async_get_firmware():
 @freeze_time("Jan 1st, 2022")
 async def test_async_get_user():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -560,10 +554,10 @@ async def test_async_get_user():
     }
     user_data = json.load(open('./tests/fixtures/complete_user.json'))
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
-        m.get(f'{API_BASE_URL}{AUTH}?include=account,vehicle,vehicle.make,unit.pod.unit_connectors,unit.pod.statuses,unit.pod.model,unit.pod.charge_schedules&timestamp=1640995200.0', payload=user_data)
-        m.get(f'{API_BASE_URL}{AUTH}?include=account,vehicle,vehicle.make,unit.pod.unit_connectors,unit.pod.statuses,unit.pod.model,unit.pod.charge_schedules', payload=user_data)
+        m.get(f'{API_BASE_URL}{AUTH}?include=account,vehicle,vehicle.make,unit.pod.unit_connectors,unit.pod.statuses,unit.pod.model,unit.pod.charge_schedules,unit.pod.charge_override&timestamp=1640995200.0', payload=user_data)
+        m.get(f'{API_BASE_URL}{AUTH}?include=account,vehicle,vehicle.make,unit.pod.unit_connectors,unit.pod.statuses,unit.pod.model,unit.pod.charge_schedules,unit.pod.charge_override', payload=user_data)
         m.get(f'{API_BASE_URL}{AUTH}?include=account', payload=user_data)
 
         async with aiohttp.ClientSession() as session:
@@ -577,10 +571,9 @@ async def test_async_get_user():
 @freeze_time("Jan 1st, 2022")
 async def test_async_set_schedules_response():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -597,9 +590,9 @@ async def test_async_set_schedules_response():
     schedules_response = json.load(open('./tests/fixtures/create_schedules.json'))
 
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
-        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules&perpage=all&timestamp=1640995200.0', payload=pods_response)
+        m.get(f'{API_BASE_URL}{USERS}/1234{PODS}?include=statuses%252Cprice%252Cmodel%252Cunit_connectors%252Ccharge_schedules%252Ccharge_override&perpage=all&timestamp=1640995200.0', payload=pods_response)
         m.put(f'{API_BASE_URL}{UNITS}/198765{CHARGE_SCHEDULES}?timestamp=1640995200.0', status=201, payload=schedules_response)
         m.put(f'{API_BASE_URL}{UNITS}/198765{CHARGE_SCHEDULES}?timestamp=1640995200.0', status=200, payload=schedules_response)
 
@@ -615,10 +608,9 @@ async def test_async_set_schedules_response():
 @freeze_time("Jan 1st, 2022")
 async def test_async_get_all_charges_response():
     auth_response = {
-        "token_type": "Bearer",
-        "expires_in": 1234,
-        "access_token": "1234",
-        "refresh_token": "1234"
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
     }
     session_response = {
         "sessions": {
@@ -630,7 +622,7 @@ async def test_async_get_all_charges_response():
     charges_reponse_small_page_2 = json.load(open('./tests/fixtures/small_charges_page_2.json'))
 
     with aioresponses() as m:
-        m.post(f'{API_BASE_URL}{AUTH}', payload=auth_response)
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
         m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
         m.get(f'{API_BASE_URL}{USERS}/1234{CHARGES}?perpage=50&page=1&timestamp=1640995200.0', payload=charges_reponse_large)
         m.get(f'{API_BASE_URL}{USERS}/1234{CHARGES}?perpage=50&page=2&timestamp=1640995200.0', payload=charges_reponse_small_page_2)
@@ -642,3 +634,422 @@ async def test_async_get_all_charges_response():
             resp: List[Charge] = await client.async_get_all_charges()
             assert 55 == len(resp)
             assert Charge == type(resp[0])
+
+@pytest.mark.asyncio
+@freeze_time("Jan 1st, 2022")
+async def test_async_get_charge_override_with_an_empty_response_meaning_smart_mode():
+    auth_response = {
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
+    }
+    session_response = {
+        "sessions": {
+            "id": "1234",
+            "user_id": "1234"
+        }
+    }
+
+    with aioresponses() as m:
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
+        m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
+        m.get(f'{API_BASE_URL}{UNITS}/1234{CHARGE_OVERRIDE}?timestamp=1640995200.0', body="", status=204)
+
+        async with aiohttp.ClientSession() as session:
+            client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
+            override = await client.async_get_charge_override(pod=Pod(data={"unit_id": 1234}))
+            assert override is None
+
+@pytest.mark.asyncio
+@freeze_time("Jan 1st, 2022")
+async def test_async_get_charge_override_with_a_manual_mode_response():
+    auth_response = {
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
+    }
+    session_response = {
+        "sessions": {
+            "id": "1234",
+            "user_id": "1234"
+        }
+    }
+    override_response = {
+        "ppid": "PSL-123456",
+        "requested_at": "2021-12-31T16:22:34.000Z",
+        "received_at": "2021-12-31T16:22:43.000Z",
+        "ends_at": None
+    }
+
+    with aioresponses() as m:
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
+        m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
+        m.get(f'{API_BASE_URL}{UNITS}/1234{CHARGE_OVERRIDE}?timestamp=1640995200.0', payload=override_response)
+
+        async with aiohttp.ClientSession() as session:
+            client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
+            override = await client.async_get_charge_override(pod=Pod(data={"unit_id": 1234}))
+            assert override is not None
+            assert ChargeOverride == type(override)
+            assert override.active is False
+            assert override.remaining_time is None
+
+@pytest.mark.asyncio
+@freeze_time("Jan 1st, 2022")
+async def test_async_get_charge_override_with_a_charge_override_time_response():
+    auth_response = {
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
+    }
+    session_response = {
+        "sessions": {
+            "id": "1234",
+            "user_id": "1234"
+        }
+    }
+    override_response = {
+        "ppid": "PSL-123456",
+        "requested_at": "2021-12-31T16:22:34.000Z",
+        "received_at": "2021-12-31T16:22:43.000Z",
+        "ends_at": "2022-01-01T03:00:00.000Z"
+    }
+
+    with aioresponses() as m:
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
+        m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
+        m.get(f'{API_BASE_URL}{UNITS}/1234{CHARGE_OVERRIDE}?timestamp=1640995200.0', payload=override_response)
+
+        async with aiohttp.ClientSession() as session:
+            client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
+            override = await client.async_get_charge_override(pod=Pod(data={"unit_id": 1234}))
+            assert override is not None
+            assert ChargeOverride == type(override)
+            assert override.active is True
+            assert override.remaining_time == timedelta(hours=3)
+
+@pytest.mark.asyncio
+@freeze_time("Jan 1st, 2022")
+async def test_async_set_charge_override_with_a_time_set():
+    auth_response = {
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
+    }
+    session_response = {
+        "sessions": {
+            "id": "1234",
+            "user_id": "1234"
+        }
+    }
+    override_response = {
+        "ppid": "PSL-123456",
+        "requested_at": "2022-01-01T00:00:00.000Z",
+        "received_at": "2022-01-01T00:00:00.000Z",
+        "ends_at": "2022-01-01T03:02:01.000Z"
+    }
+
+    with aioresponses() as m:
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
+        m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
+        m.put(f'{API_BASE_URL}{UNITS}/1234{CHARGE_OVERRIDE}?timestamp=1640995200.0', status=201, payload=override_response)
+
+        async with aiohttp.ClientSession() as session:
+            client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
+            override = await client.async_set_charge_override(pod=Pod(data={"unit_id": 1234}), hours=3, minutes=2, seconds=1)
+            assert override is not None
+            assert ChargeOverride == type(override)
+            assert override.active is True
+            assert override.remaining_time == timedelta(hours=3, minutes=2, seconds=1)
+
+@pytest.mark.asyncio
+@freeze_time("Jan 1st, 2022")
+async def test_async_set_charge_override_with_an_invalid_time_set():
+    auth_response = {
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
+    }
+    session_response = {
+        "sessions": {
+            "id": "1234",
+            "user_id": "1234"
+        }
+    }
+    override_response = {
+        "ppid": "PSL-123456",
+        "requested_at": "2022-01-01T00:00:00.000Z",
+        "received_at": "2022-01-01T00:00:00.000Z",
+        "ends_at": "2022-01-01T03:02:01.000Z"
+    }
+
+    with aioresponses() as m:
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
+        m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
+        m.put(f'{API_BASE_URL}{UNITS}/1234{CHARGE_OVERRIDE}?timestamp=1640995200.0', status=201, payload=override_response)
+
+        async with aiohttp.ClientSession() as session:
+            client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
+
+            with pytest.raises(ChargeOverrideValidationError):
+                await client.async_set_charge_override(pod=Pod(data={"unit_id": 1234}), hours=-3, minutes=0, seconds="a")
+
+
+@pytest.mark.asyncio
+@freeze_time("Jan 1st, 2022")
+async def test_async_delete_charge_override_with_a_204_response():
+    auth_response = {
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
+    }
+    session_response = {
+        "sessions": {
+            "id": "1234",
+            "user_id": "1234"
+        }
+    }
+
+    with aioresponses() as m:
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
+        m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
+        m.delete(f'{API_BASE_URL}{UNITS}/1234{CHARGE_OVERRIDE}?timestamp=1640995200.0', status=204)
+
+        async with aiohttp.ClientSession() as session:
+            client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
+
+            response = await client.async_delete_charge_override(pod=Pod(data={"unit_id": 1234}))
+            assert response is True
+
+
+@pytest.mark.asyncio
+@freeze_time("Jan 1st, 2022")
+async def test_async_delete_charge_override_with_non_204_response():
+    auth_response = {
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
+    }
+    session_response = {
+        "sessions": {
+            "id": "1234",
+            "user_id": "1234"
+        }
+    }
+
+    with aioresponses() as m:
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
+        m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
+        m.delete(f'{API_BASE_URL}{UNITS}/1234{CHARGE_OVERRIDE}?timestamp=1640995200.0', status=201)
+
+        async with aiohttp.ClientSession() as session:
+            client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
+
+            response = await client.async_delete_charge_override(pod=Pod(data={"unit_id": 1234}))
+            assert response is False
+
+
+@pytest.mark.asyncio
+@freeze_time("Jan 1st, 2022")
+async def test_async_get_connectivity_status():
+    auth_response = {
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
+    }
+    session_response = {
+        "sessions": {
+            "id": "1234",
+            "user_id": "1234"
+        }
+    }
+    connectivity_status_response = {
+        "ppid": "PSL-123456",
+        "evses": [
+            {
+                "id": 1,
+                "connectivityState": {
+                    "protocol": "POW",
+                    "connectivityStatus": "ONLINE",
+                    "signalStrength": -68,
+                    "lastMessageAt": "2024-04-05T18:36:29Z",
+                    "connectionStartedAt": "2024-04-05T18:26:26.819Z",
+                    "connectionQuality": 3
+                },
+                "connectors": [{
+                    "id": 1,
+                    "door": "A",
+                    "chargingState": "SUSPENDED_EV"
+                }],
+                "architecture": "arch3",
+                "energyOfferStatus": {
+                    "isOfferingEnergy": True,
+                    "reason": "CHARGE_SCHEDULE",
+                    "until": None,
+                    "randomDelay": None,
+                    "doNotCache": False
+                }
+            }
+        ],
+        "connectedComponents": ["evse"]
+    }
+
+    with aioresponses() as m:
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
+        m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
+        m.get(f'{MOBILE_API_BASE_URL}{CHARGERS}/PSL-123456{CONNECTIVITY_STATUS}?timestamp=1640995200.0', payload=connectivity_status_response)
+
+        async with aiohttp.ClientSession() as session:
+            client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
+
+            connectivity_status_response = await client.async_get_connectivity_status(pod=Pod(data={"ppid": "PSL-123456"}))
+
+            assert connectivity_status_response is not None
+            assert ConnectivityStatus == type(connectivity_status_response)
+            assert connectivity_status_response.ppid == "PSL-123456"
+            assert connectivity_status_response.connected_components == ["evse"]
+            assert len(connectivity_status_response.evses) == 1
+            assert Evse == type(connectivity_status_response.evses[0])
+            assert connectivity_status_response.evses[0].id == 1
+            assert connectivity_status_response.evses[0].connectivity_state.protocol == "POW"
+            assert connectivity_status_response.evses[0].connectivity_state.connectivity_status == "ONLINE"
+            assert connectivity_status_response.evses[0].connectivity_state.signal_strength == -68
+            assert connectivity_status_response.evses[0].connectivity_state.last_message_at == datetime(
+                year=2024,
+                month=4,
+                day=5,
+                hour=18,
+                minute=36,
+                second=29,
+                tzinfo=timezone.utc
+            )
+            assert connectivity_status_response.evses[0].connectivity_state.connection_started_at == datetime(
+                year=2024,
+                month=4,
+                day=5,
+                hour=18,
+                minute=26,
+                second=26,
+                microsecond=819000,
+                tzinfo=timezone.utc
+            )
+            assert connectivity_status_response.evses[0].connectivity_state.connection_quality == 3
+            assert connectivity_status_response.evses[0].connectors[0].id == 1
+            assert connectivity_status_response.evses[0].connectors[0].door == "A"
+            assert connectivity_status_response.evses[0].connectors[0].charging_state == "SUSPENDED_EV"
+            assert connectivity_status_response.evses[0].architecture == "arch3"
+            assert connectivity_status_response.evses[0].energy_offer_status.is_offering_energy is True
+            assert connectivity_status_response.evses[0].energy_offer_status.reason == "CHARGE_SCHEDULE"
+            assert connectivity_status_response.evses[0].energy_offer_status.until is None
+            assert connectivity_status_response.evses[0].energy_offer_status.random_delay is None
+            assert connectivity_status_response.evses[0].energy_offer_status.do_not_cache == False
+
+
+@pytest.mark.asyncio
+@freeze_time("Jan 1st, 2022")
+async def test_async_set_charge_mode_manual_with_expected_response():
+    auth_response = {
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
+    }
+    session_response = {
+        "sessions": {
+            "id": "1234",
+            "user_id": "1234"
+        }
+    }
+    override_response = {
+        "ppid": "PSL-123456",
+        "requested_at": "2022-01-01T00:00:00.000Z",
+        "received_at": "2022-01-01T00:00:00.000Z",
+        "ends_at": None
+    }
+
+    with aioresponses() as m:
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
+        m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
+        m.put(f'{API_BASE_URL}{UNITS}/1234{CHARGE_OVERRIDE}?timestamp=1640995200.0', status=201, payload=override_response)
+
+        async with aiohttp.ClientSession() as session:
+            client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
+            override = await client.async_set_charge_mode_manual(pod=Pod(data={"ppid": "PSL-123456", "unit_id": 1234}))
+            assert override == True
+
+@pytest.mark.asyncio
+@freeze_time("Jan 1st, 2022")
+async def test_async_set_charge_mode_manual_with_unexpected_response():
+    auth_response = {
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
+    }
+    session_response = {
+        "sessions": {
+            "id": "1234",
+            "user_id": "1234"
+        }
+    }
+    override_response = {}
+
+    with aioresponses() as m:
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
+        m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
+        m.put(f'{API_BASE_URL}{UNITS}/1234{CHARGE_OVERRIDE}?timestamp=1640995200.0', status=201, payload=override_response)
+
+        async with aiohttp.ClientSession() as session:
+            client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
+            override = await client.async_set_charge_mode_manual(pod=Pod(data={"ppid": "PSL-123456", "unit_id": 1234}))
+            assert override == False
+
+
+@pytest.mark.asyncio
+@freeze_time("Jan 1st, 2022")
+async def test_async_set_charge_mode_smart_with_204_response():
+    auth_response = {
+        "token_type": "Bearer",
+        "expires_in": 1234,
+        "access_token": "1234",
+        "refresh_token": "1234"
+    }
+    session_response = {
+        "sessions": {
+            "id": "1234",
+            "user_id": "1234"
+        }
+    }
+
+    with aioresponses() as m:
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
+        m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
+        m.delete(f'{API_BASE_URL}{UNITS}/1234{CHARGE_OVERRIDE}?timestamp=1640995200.0', status=204)
+
+        async with aiohttp.ClientSession() as session:
+            client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
+            override = await client.async_set_charge_mode_smart(pod=Pod(data={"unit_id": 1234}))
+            assert override is True
+
+@pytest.mark.asyncio
+@freeze_time("Jan 1st, 2022")
+async def test_async_set_charge_mode_smart_with_unexpected_response():
+    auth_response = {
+        "idToken": "1234",
+        "expiresIn": "1234",
+        "refreshToken": "1234"
+    }
+    session_response = {
+        "sessions": {
+            "id": "1234",
+            "user_id": "1234"
+        }
+    }
+
+    with aioresponses() as m:
+        m.post(f'{GOOGLE_BASE_URL}{PASSWORD_VERIFY}', payload=auth_response)
+        m.post(f'{API_BASE_URL}{SESSIONS}', payload=session_response)
+        m.delete(f'{API_BASE_URL}{UNITS}/1234{CHARGE_OVERRIDE}?timestamp=1640995200.0', status=200)
+
+        async with aiohttp.ClientSession() as session:
+            client = PodPointClient(username="1233", password="1234", session=session, include_timestamp=True)
+            override = await client.async_set_charge_mode_smart(pod=Pod(data={"unit_id": 1234}))
+            assert override is False

@@ -1,5 +1,56 @@
 # Pod Point Client Changelog
 
+## v1.6.0
+
+* Add getting connection status from API:
+  * `Client.async_get_connection_status` - @mattrayner
+* Add support for charge override deletion:
+  * Add `Client.async_delete_charge_override` - @mattrayner
+* Add `ConnectivityStatus` - @mattrayner
+* Add `Pod.offering_energy` - @mattrayner
+* Add `Pod.last_message_at` - @mattrayner
+* Add `Pod.charging_state` - @mattrayner
+* Add `SUSPENDED_EV` to Pod state Enums - @mattrayner
+
+## v1.5.0
+
+* Add support for refreshing expired tokens, rather than grabbing new ones each time
+* Update example.py to demonstrate token expiry
+
+## v1.4.3
+
+* Remove additional / from pod point api calls
+
+## v1.4.2
+
+* Fix an issue with `Session` inside of `Auth` causing token re-authentication to fail
+
+## v1.4.1
+
+* Add additional debug logs for testing new google auth
+
+## v1.4.0
+
+* Update auth system to new Google-based auth from Pod Point
+
+## v1.3.1
+
+* Add `pytz` as a dependency
+* Fix `Pod.charge_mode` bug
+
+## v1.3.0
+
+* Migrate to API v5 - @mattrayner
+* Add support for charge overrides:
+  * Add `ChargeMode` enum - @mattrayner
+  * Add `ChargeOverride` - @mattrayner
+  * Add `Client.async_get_charge_override` - @mattrayner
+  * Add `Client.async_set_charge_override` - @mattrayner
+  * Add `Client.async_set_charge_mode_manual` - @mattrayner
+  * Add `Client.async_set_charge_mode_smart` - @mattrayner
+  * Add `Pod.charge_override` - @mattrayner
+  * Add `Pod.charge_mode` - @mattrayner
+* Add api wrapper delete support
 
 ## v1.2.0
 
@@ -22,7 +73,7 @@
 * Added additional testing dependencies - @mattrayner
 * Add CD pipeline, when a new tag/release is pushed, auto-publish to PyPi - @mattrayner
 
-## v0.3.0
+## v0.3.0
 
 * Add http_debug flag - @mattrayner
 * When enabled, complete response bodies will be sent to logger.debug
@@ -30,7 +81,7 @@
 * Completed a pylon pass to standardize the code base - @mattrayner
 * Improved test coverage - @mattrayner
 
-## v0.2.2
+## v0.2.2
 
 * Make timestamp=XXX optional, and off by default
 * Greatly improve test coverage

@@ -4,6 +4,8 @@ from .pod import Pod, Firmware
 from .user import User
 from .schedule import Schedule, ScheduleStatus
 from .charge import Charge
+from .charge_override import ChargeOverride
+from .connectivity_status import ConnectivityStatus
 
 class PodFactory:
     """Factory for creating Pod objects"""
@@ -62,6 +64,14 @@ class ChargeFactory:
 
         return charges
 
+class ChargeOverrideFactory:
+    """Factory  for creating Charge objects"""
+    def build_charge_override(self, charge_override_response: Dict[str, Any]) -> ChargeOverride:
+        """Build a list of charge objects based off of a response from pod point"""
+        if charge_override_response is None:
+            return None
+
+        return ChargeOverride(data=charge_override_response)
 
 class FirmwareFactory:
     """Factory  for creating Firmware objects"""
@@ -87,3 +97,12 @@ class UserFactory:
             return None
 
         return User(data=user_data)
+
+class ConnectivityStatusFactory:
+    """Factory  for creating ConnectivityStatus objects"""
+    def build_connectivity_status(self, connectivity_status_response: Dict[str, Any]):
+        """Build a ConnectivityStatus object based off of a response from pod point"""
+        if connectivity_status_response is None:
+            return None
+
+        return ConnectivityStatus(data=connectivity_status_response)
